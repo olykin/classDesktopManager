@@ -17,5 +17,5 @@ readme: README.md
 icon: icon.png
 repoOwner: olykin
 repoName: classDesktopManager
-assetsRoot: main
+assetsRoot: main/classisland-plugin
 artifactName: ClassDesktopManagerBridge.cipx
