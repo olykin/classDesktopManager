@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# PyInstaller
+build/
+*.spec
+
+# 本地虚拟环境
+.venv/
+venv/
+
+# 日志与临时文件
+*.log
+*.tmp
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# 编辑器
+.vscode/
+.idea/
