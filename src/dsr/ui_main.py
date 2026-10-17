@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 classDesktopManager contributors
 
@@ -14,7 +14,7 @@ from .uishared import (ACCENT, ACCENT_D, BG, BORDER, CARD, DANGER, MUTED, OK,
                        SOFT, TEXT, WARN, center, font as _font, px, short_path)
 
 WIDTH = px(560)
-HEIGHT = px(660)
+HEIGHT = px(680)
 
 
 class FlatButton(tk.Button):
@@ -88,7 +88,7 @@ class MainWindow:
 
     def _build(self):
         # ---- 顶部横幅
-        head = tk.Frame(self.win, bg=ACCENT, height=px(88))
+        head = tk.Frame(self.win, bg=ACCENT, height=px(84))
         head.pack(fill="x")
         head.pack_propagate(False)
         tk.Label(head, text="classDesktopManager", bg=ACCENT, fg="#FFFFFF",
@@ -98,6 +98,16 @@ class MainWindow:
                                    font=_font(9), anchor="w")
         self.lbl_status.pack(anchor="w", padx=px(18), pady=(px(2), 0))
 
+        # ---- 底栏先占位，内容再高也不会把按钮挤出去
+        foot = tk.Frame(self.win, bg=BG)
+        foot.pack(side="bottom", fill="x", padx=px(14), pady=(0, px(12)))
+        tk.Label(foot, text="v%s · 单击托盘图标可打开本窗口或退出"
+                 % paths.APP_VERSION, bg=BG, fg=MUTED,
+                 font=_font(8)).pack(side="left")
+        FlatButton(foot, "退出软件", self.app.shutdown,
+                   "danger").pack(side="right")
+        FlatButton(foot, "关于", self._about).pack(side="right", padx=(0, px(8)))
+
         wrap = tk.Frame(self.win, bg=BG)
         wrap.pack(fill="both", expand=True, padx=px(14), pady=px(12))
 
@@ -105,6 +115,7 @@ class MainWindow:
         card = Card(wrap)
         card.pack(fill="x")
         self._row(card, "监视目录", "lbl_desktop")
+        self._row(card, "下载目录", "lbl_downloads")
         self._row(card, "科目文件夹", "lbl_subjects")
         self._row(card, "检测方式", "lbl_mode")
         self._row(card, "关注类型", "lbl_kinds")
@@ -132,7 +143,7 @@ class MainWindow:
         self.list_subjects = tk.Listbox(
             holder, bg=SOFT, fg=TEXT, font=_font(10), relief="flat",
             bd=0, highlightthickness=0, activestyle="none",
-            selectbackground="#DCE9F7", selectforeground=TEXT, height=6)
+            selectbackground="#DCE9F7", selectforeground=TEXT, height=5)
         sb = tk.Scrollbar(holder, command=self.list_subjects.yview,
                           relief="flat", bd=0, width=px(12))
         self.list_subjects.configure(yscrollcommand=sb.set)
@@ -142,7 +153,7 @@ class MainWindow:
 
         # ---- 最近记录
         card3 = Card(wrap, "最近的归档记录")
-        card3.pack(fill="both", expand=True, pady=(px(12), 0))
+        card3.pack(fill="x", pady=(px(12), 0))
         self.txt_log = tk.Text(
             card3, bg=SOFT, fg=TEXT, font=_font(9), relief="flat",
             bd=0, highlightthickness=0, height=6, wrap="none",
@@ -150,19 +161,9 @@ class MainWindow:
         self.txt_log.pack(fill="both", expand=True, padx=px(14),
                           pady=(px(4), px(12)))
 
-        # ---- 底栏
-        foot = tk.Frame(self.win, bg=BG)
-        foot.pack(fill="x", padx=px(14), pady=(0, px(12)))
-        tk.Label(foot, text="v%s · 单击托盘图标可打开本窗口或退出"
-                 % paths.APP_VERSION, bg=BG, fg=MUTED,
-                 font=_font(8)).pack(side="left")
-        FlatButton(foot, "退出软件", self.app.shutdown,
-                   "danger").pack(side="right")
-        FlatButton(foot, "关于", self._about).pack(side="right", padx=(0, px(8)))
-
     def _row(self, card, label, attr):
         row = tk.Frame(card, bg=CARD)
-        row.pack(fill="x", padx=px(14), pady=px(4))
+        row.pack(fill="x", padx=px(14), pady=px(3))
         tk.Label(row, text=label, bg=CARD, fg=MUTED, font=_font(9),
                  width=8, anchor="w").pack(side="left")
         lbl = tk.Label(row, text="-", bg=CARD, fg=TEXT, font=_font(9),
@@ -178,11 +179,22 @@ class MainWindow:
         app = self.app
         cfg = app.cfg
         paused = bool(cfg.get("paused"))
+        watch_dl = bool(cfg.get("watch_downloads"))
         self.lbl_status.configure(
             text=("已暂停提醒 · 单击「继续提醒」恢复" if paused
-                  else "正在后台监视桌面 · 新文件会弹出人物提示"))
+                  else "正在后台监视桌面%s · 新文件会弹出人物提示"
+                       % ("和下载文件夹" if watch_dl else "")))
         self.lbl_desktop.configure(
             text=short_path(cfg.get("desktop_path") or "-", 34))
+        if watch_dl:
+            dl_path = app.downloads or app.resolve_downloads_path()
+            dl_text = (short_path(dl_path, 32) if dl_path
+                       else "没找到下载文件夹，请到设置里指定")
+        else:
+            dl_text = "未监视（可在设置里开启）"
+        self.lbl_downloads.configure(
+            text=dl_text,
+            fg=TEXT if watch_dl else MUTED)
         names = config.subject_names(cfg)
         self.lbl_subjects.configure(text="%d 个 · %s" % (
             len(names), "、".join(names[:6]) + ("…" if len(names) > 6 else "")))
@@ -246,6 +258,7 @@ class MainWindow:
             paths.APP_NAME,
             "版本 %s\n\n把 U 盘里的文件复制到桌面时，我会用人物对话气泡提醒您\n"
             "把它放进对应的科目文件夹，还可以一键帮您移过去。\n\n"
+            "开启「同时监视下载文件夹」后，下载完成的文件也会这样提醒。\n\n"
             "配置文件：%s" % (paths.APP_VERSION, paths.appdata_dir()),
             parent=self.win)
 

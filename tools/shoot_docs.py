@@ -217,8 +217,8 @@ def run():
     # 1) 主界面 ---------------------------------------------------------
     def open_main():
         app.open_main()
-        # 96 DPI 下主界面比 125% 时略矮，加高一点保证底栏完整
-        app.main_window.win.geometry("560x760+120+40")
+        # 与默认窗口尺寸一致，位置挪到左上干净区
+        app.main_window.win.geometry("560x680+120+40")
 
     at(700, open_main)
     at(1900, lambda: grab_window(app.main_window.win, "01-main"))
@@ -238,7 +238,7 @@ def run():
             body = sf.body
             body.update_idletasks()
             cards = [w for w in body.winfo_children() if w.winfo_height() > 80]
-            target = cards[2]
+            target = cards[3]
             total = sf.canvas.bbox("all")[3] or 1
             sf.canvas.yview_moveto(max(0.0, target.winfo_y() / float(total)))
         except Exception as e:  # noqa: BLE001

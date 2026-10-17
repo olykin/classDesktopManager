@@ -170,6 +170,28 @@ class SettingsWindow:
                     side="left")
         self._check(row, "显示「放置在其他文件夹」按钮", self.v_open, side="left")
 
+        # ---- 下载文件夹
+        c_dl = self._card(wrap, "下载文件夹")
+        self.v_downloads = self._var("watch_downloads")
+        self._check(c_dl, "同时监视下载文件夹（默认关闭）", self.v_downloads)
+        tk.Label(c_dl,
+                 text="开启后，新下载的文件会像桌面文件一样弹出归档提醒。"
+                      "Windows 的下载位置改过也能自动找到；找不到时可以手动指定。",
+                 bg=CARD, fg=MUTED, font=_font(8), anchor="w", justify="left",
+                 wraplength=px(540)).pack(anchor="w", padx=px(14),
+                                           pady=(0, px(6)))
+        dlrow = tk.Frame(c_dl, bg=CARD)
+        dlrow.pack(fill="x", padx=px(14), pady=(0, px(12)))
+        tk.Label(dlrow, text="下载目录", bg=CARD, fg=TEXT, font=_font(9),
+                 width=8, anchor="w").pack(side="left")
+        self.lbl_dl = tk.Label(dlrow, text="", bg=CARD, fg=TEXT, font=_font(9),
+                               anchor="w", justify="left")
+        self.lbl_dl.pack(side="left", fill="x", expand=True)
+        FlatButton(dlrow, "更改…", self._pick_downloads).pack(side="right")
+        FlatButton(dlrow, "自动定位", self._use_auto_downloads).pack(
+            side="right", padx=px(6))
+        self._refresh_dl_label()
+
         # ---- 关注哪些文件
         c3 = self._card(wrap, "关注哪些文件")
         tk.Label(c3, text="快捷方式（.lnk / .url）和临时文件永远不会打扰您。",
@@ -262,6 +284,33 @@ class SettingsWindow:
 
     def _on_wheel(self, ev):
         self.scroll.on_wheel(ev)
+
+    # -------------------------------------------------------- 下载文件夹
+    def _downloads_display(self):
+        custom = str(self.cfg.get("downloads_path") or "").strip()
+        path = custom or winapi.get_downloads_path()
+        if not path or not os.path.isdir(path):
+            return "（没找到，请点「更改…」指定）"
+        return short_path(path, 46)
+
+    def _refresh_dl_label(self):
+        self.lbl_dl.configure(text=self._downloads_display())
+
+    def _pick_downloads(self):
+        from tkinter import filedialog
+        cur = (str(self.cfg.get("downloads_path") or "").strip()
+               or winapi.get_downloads_path())
+        chosen = filedialog.askdirectory(
+            parent=self.win, title="选择下载文件夹",
+            initialdir=cur if os.path.isdir(cur) else None)
+        if not chosen:
+            return
+        self.cfg["downloads_path"] = os.path.normpath(chosen)
+        self._refresh_dl_label()
+
+    def _use_auto_downloads(self):
+        self.cfg["downloads_path"] = ""
+        self._refresh_dl_label()
 
     def _load_char_thumbs(self):
         out = {}
@@ -411,6 +460,9 @@ class SettingsWindow:
         self.v_duration.set(14)
         self.v_paused.set(False)
         self.v_ask.set(True)
+        self.v_downloads.set(False)
+        self.cfg["downloads_path"] = ""
+        self._refresh_dl_label()
         for k, _l in config.AUTO_KIND_CHOICES:
             self.v_kinds[k].set(k in config.DEFAULTS["auto_kinds"])
         self._reload_subjects()
@@ -432,6 +484,8 @@ class SettingsWindow:
         kinds = [k for k, _l in config.AUTO_KIND_CHOICES
                  if self.v_kinds[k].get()]
         cfg["auto_kinds"] = kinds
+        cfg["watch_downloads"] = bool(self.v_downloads.get())
+        cfg["downloads_path"] = str(self.cfg.get("downloads_path") or "").strip()
         cfg["subjects"] = self.cfg.get("subjects", [])
         cfg["first_run"] = False
         ok, err = config.save(cfg)
@@ -442,6 +496,7 @@ class SettingsWindow:
         self.app._show({
             "title": "设置已保存",
             "body": ["开机自启动：%s" % ("已开启" if cfg["autostart"] else "已关闭"),
+                     "下载文件夹监视：%s" % ("已开启" if cfg["watch_downloads"] else "已关闭"),
                      "提示人物：%s" % paths.CHARACTER_NAMES.get(
                          cfg["character"], cfg["character"])],
             "hint": "随时可以在托盘菜单里重新打开设置",

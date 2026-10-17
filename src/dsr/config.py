@@ -128,6 +128,8 @@ DEFAULTS = {
     "ext_subjects": {},          # {".xlsx": "数学"} 老师亲自指定过的类型映射
     "first_run": True,
     "desktop_path": "",          # 留空表示自动检测
+    "watch_downloads": False,    # 是否同时监视下载文件夹（默认关闭）
+    "downloads_path": "",        # 留空表示自动检测（含用户改过下载位置的情况）
 }
 
 _CJK = re.compile(r"[\u3000-\u9fff\uf900-\ufaff]")

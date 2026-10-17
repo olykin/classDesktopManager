@@ -53,6 +53,8 @@ class App:
         self.tray = None
         self.bubbles = None
         self.watcher = None
+        self.dl_watcher = None
+        self.downloads = ""
 
         self.main_window = None
         self.settings_window = None
@@ -71,6 +73,7 @@ class App:
         _log("启动：桌面目录 = %s" % self.desktop)
         self._start_ui_thread()
         self._start_watcher()
+        self._sync_downloads_watcher()
         self._start_detect_worker()
         self._sync_autostart()
         self.root.after(120, self._pump_ui)
@@ -102,6 +105,61 @@ class App:
         self.watcher.set_paused(bool(self.cfg.get("paused")))
         self.watcher.start()
 
+    # ------------------------------------------------------- 下载文件夹
+    def downloads_enabled(self):
+        return bool(self.cfg.get("watch_downloads"))
+
+    def resolve_downloads_path(self):
+        """定位下载目录。
+
+        设置里手动指定了目录就优先用它；否则交给 Windows 已知文件夹接口，
+        这样老师把下载位置改到别的盘也能找到。
+        """
+        custom = str(self.cfg.get("downloads_path") or "").strip()
+        if custom:
+            if os.path.isdir(custom):
+                return custom
+            _log("设置的下载目录不可用：%s" % custom)
+        try:
+            path = winapi.get_downloads_path()
+        except Exception:
+            path = ""
+        if path and os.path.isdir(path):
+            return path
+        return ""
+
+    def _sync_downloads_watcher(self):
+        """按配置启动 / 停止 / 更新下载文件夹监视。返回实际监视的目录。"""
+        if not self.downloads_enabled():
+            if self.dl_watcher:
+                self.dl_watcher.stop()
+                self.dl_watcher = None
+            self.downloads = ""
+            return ""
+        path = self.resolve_downloads_path()
+        self.downloads = path
+        if not path:
+            _log("找不到下载文件夹，已跳过监视")
+            if self.dl_watcher:
+                self.dl_watcher.stop()
+                self.dl_watcher = None
+            return ""
+        if self.dl_watcher and self.dl_watcher.desktop_path == path:
+            self.dl_watcher.set_paused(bool(self.cfg.get("paused")))
+            self.dl_watcher.set_interval(float(self.cfg.get("watch_interval") or 1.0))
+            return path
+        if self.dl_watcher:
+            self.dl_watcher.stop()
+        self.dl_watcher = DesktopWatcher(
+            path,
+            interval=float(self.cfg.get("watch_interval") or 1.0),
+            on_new_file=lambda p, s, m: self._on_new_file(p, s, m, "下载"),
+            on_error=lambda e: _log("监视下载文件夹出错：%r" % (e,)))
+        self.dl_watcher.set_paused(bool(self.cfg.get("paused")))
+        self.dl_watcher.start()
+        _log("启动：同时监视下载文件夹 = %s" % path)
+        return path
+
     def _start_detect_worker(self):
         t = threading.Thread(target=self._detect_loop, name="dsr-detect",
                              daemon=True)
@@ -128,6 +186,8 @@ class App:
         try:
             if self.watcher:
                 self.watcher.stop()
+            if self.dl_watcher:
+                self.dl_watcher.stop()
         except Exception:
             pass
         try:
@@ -194,6 +254,8 @@ class App:
         config.save(self.cfg)
         if self.watcher:
             self.watcher.set_paused(paused)
+        if self.dl_watcher:
+            self.dl_watcher.set_paused(paused)
         if self.tray:
             self.ui_thread.post(lambda: self.tray.set_paused(paused))
         self.refresh_main()
@@ -206,6 +268,16 @@ class App:
             os.startfile(self.desktop)          # noqa: S606
         except Exception as e:  # noqa: BLE001
             _log("打开桌面失败：%r" % (e,))
+
+    def open_downloads(self):
+        p = self.downloads or self.resolve_downloads_path()
+        if not p:
+            self.open_desktop()
+            return
+        try:
+            os.startfile(p)                     # noqa: S606
+        except Exception as e:  # noqa: BLE001
+            _log("打开下载文件夹失败：%r" % (e,))
 
     def open_subject_folder(self, subject):
         d = os.path.join(self.desktop, subject)
@@ -252,6 +324,9 @@ class App:
                 self.watcher.set_interval(float(self.cfg["watch_interval"]))
             if self.desktop != old_desktop:
                 self.watcher.set_desktop(self.desktop)
+            if self.dl_watcher:
+                self.dl_watcher.set_interval(float(self.cfg.get("watch_interval") or 1.0))
+        self._sync_downloads_watcher()
         self._sync_autostart()
         if self.tray:
             self.ui_thread.post(
@@ -259,7 +334,7 @@ class App:
         self.refresh_main()
 
     # ============================================================ 新文件
-    def _on_new_file(self, path, size, mtime):
+    def _on_new_file(self, path, size, mtime, origin="桌面"):
         if self._closing:
             return
         now = time.time()
@@ -269,7 +344,7 @@ class App:
         if len(self._recent) > 200:
             for k in sorted(self._recent, key=self._recent.get)[:100]:
                 self._recent.pop(k, None)
-        self._detect_q.put((path, size, mtime))
+        self._detect_q.put((path, size, mtime, origin))
 
     def _detect_loop(self):
         while True:
@@ -281,7 +356,7 @@ class App:
             except Exception:
                 _log(traceback.format_exc())
 
-    def _handle_new_file(self, path, size, mtime):
+    def _handle_new_file(self, path, size, mtime, source="桌面"):
         if self.cfg.get("paused"):
             return
         name = os.path.basename(path)
@@ -296,7 +371,7 @@ class App:
         scoped = config.in_scope(name, self.cfg)
 
         src_drive = None
-        if mode in ("smart", "usb"):
+        if source == "桌面" and mode in ("smart", "usb"):
             found = usbscan.find_source(name, size)
             src_drive = found[0] if found else None
         from_usb = bool(src_drive)
@@ -319,7 +394,7 @@ class App:
         elif mode == "off":
             return
 
-        origin = ("U 盘 %s" % src_drive.rstrip("\\")) if from_usb else "桌面"
+        origin = ("U 盘 %s" % src_drive.rstrip("\\")) if from_usb else source
         if subject:
             _log("提醒：%s（来源 %s，建议 %s）" % (name, origin, subject))
             self._show_file_bubble(path, size, subject, reason, origin, kind)
@@ -484,11 +559,12 @@ class App:
         return target
 
     def _move_file(self, src, subject, origin=""):
+        where = "下载文件夹" if origin == "下载" else "桌面"
         if not os.path.exists(src):
             self._show({
                 "title": "咦，文件不见了",
-                "body": ["《%s》已经不在桌面上了。" % config.short_name(
-                    os.path.basename(src))],
+                "body": ["《%s》已经不在%s里了。" % (config.short_name(
+                    os.path.basename(src)), where)],
                 "hint": "可能已经被移动或删除",
                 "buttons": [{"id": "dismiss", "text": "知道了", "kind": "primary"}],
                 "accent": "#B7791F",
@@ -519,6 +595,8 @@ class App:
         config.append_history(os.path.basename(src), subject)
         if self.watcher:
             self.watcher.rescan()
+        if self.dl_watcher:
+            self.dl_watcher.rescan()
         _log("已移动：%s -> %s" % (src, target))
         self._show({
             "title": "搞定啦！",
@@ -545,32 +623,38 @@ class App:
                 "accent": "#B7791F",
             }, duration=8)
             return
-        items = []
-        unknown = []
-        try:
-            for entry in sorted(os.listdir(self.desktop)):
-                full = os.path.join(self.desktop, entry)
-                if not os.path.isfile(full):
-                    continue
-                if entry.startswith(".") or entry.startswith("~"):
-                    continue
-                if entry.lower() in ("desktop.ini", "thumbs.db"):
-                    continue
-                if config.is_shortcut(entry):
-                    continue
-                subject, reason = config.suggest_subject(entry, self.cfg)
-                if subject:
-                    items.append((full, entry, subject))
-                elif config.in_scope(entry, self.cfg) \
-                        and self.cfg.get("ask_unknown", True):
-                    unknown.append(full)
-        except Exception:
-            _log(traceback.format_exc())
+        items = []      # (full, name, subject, 来源)
+        unknown = []    # (full, 来源)
+        folders = [(self.desktop, "桌面")]
+        if self.downloads_enabled():
+            dl = self.downloads or self.resolve_downloads_path()
+            if dl and dl != self.desktop:
+                folders.append((dl, "下载"))
+        for folder, source in folders:
+            try:
+                for entry in sorted(os.listdir(folder)):
+                    full = os.path.join(folder, entry)
+                    if not os.path.isfile(full):
+                        continue
+                    if entry.startswith(".") or entry.startswith("~"):
+                        continue
+                    if entry.lower() in ("desktop.ini", "thumbs.db"):
+                        continue
+                    if config.is_shortcut(entry):
+                        continue
+                    subject, reason = config.suggest_subject(entry, self.cfg)
+                    if subject:
+                        items.append((full, entry, subject, source))
+                    elif config.in_scope(entry, self.cfg) \
+                            and self.cfg.get("ask_unknown", True):
+                        unknown.append((full, source))
+            except Exception:
+                _log(traceback.format_exc())
         if not items and not unknown:
             self._show({
-                "title": "桌面很整洁",
+                "title": "文件夹很整洁",
                 "body": ["没有发现需要归档的文件。"],
-                "hint": "把 U 盘里的文件复制到桌面，我会立刻提醒您",
+                "hint": "把 U 盘里的文件复制到桌面，或下载新文件，我会立刻提醒您",
                 "buttons": [{"id": "dismiss", "text": "好的", "kind": "primary"}],
                 "accent": "#2F855A",
             }, duration=10)
@@ -583,10 +667,10 @@ class App:
         buttons.append({"id": "dismiss", "text": "稍后", "kind": "ghost"})
 
         names = ["《%s》→「%s」" % (config.short_name(n, 22), s)
-                 for _f, n, s in items[:4]]
+                 for _f, n, s, _o in items[:4]]
         if len(items) > 4:
             names.append("…还有 %d 个" % (len(items) - 4))
-        for full in unknown[:3]:
+        for full, _src in unknown[:3]:
             names.append("《%s》→ 需要您指定文件夹"
                          % config.short_name(os.path.basename(full), 22))
         if len(unknown) > 3:
@@ -615,7 +699,7 @@ class App:
                         return          # 老师按了取消，不再追问下一个
                     state["first"] = False
                     while queue:
-                        nxt = queue.pop(0)
+                        nxt, src_origin = queue.pop(0)
                         if not os.path.exists(nxt):
                             continue
                         try:
@@ -623,7 +707,7 @@ class App:
                         except OSError:
                             size = 0
                         self.open_picker(
-                            nxt, size, "桌面",
+                            nxt, size, src_origin,
                             config.file_kind(os.path.basename(nxt)),
                             on_done=step)
                         return
@@ -635,7 +719,7 @@ class App:
     def _archive_all(self, items):
         done = 0
         fail = 0
-        for full, name, subject in items:
+        for full, name, subject, _origin in items:
             try:
                 dst_dir = os.path.join(self.desktop, subject)
                 os.makedirs(dst_dir, exist_ok=True)
@@ -648,6 +732,8 @@ class App:
                 fail += 1
         if self.watcher:
             self.watcher.rescan()
+        if self.dl_watcher:
+            self.dl_watcher.rescan()
         body = ["成功归档 %d 个文件" % done]
         if fail:
             body.append("有 %d 个没能移动" % fail)

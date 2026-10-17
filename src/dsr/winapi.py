@@ -150,6 +150,11 @@ FOLDERID_Desktop = GUID(0xB4BFCC3A, 0xDB2C, 0x424C,
                         (ctypes.c_ubyte * 8)(0xB0, 0x29, 0x7F, 0xE9,
                                              0x9A, 0x87, 0xC6, 0x41))
 
+# {374DE290-123F-4565-9164-39C4925E467B}  FOLDERID_Downloads
+FOLDERID_Downloads = GUID(0x374DE290, 0x123F, 0x4565,
+                          (ctypes.c_ubyte * 8)(0x91, 0x64, 0x39, 0xC4,
+                                               0x92, 0x5E, 0x46, 0x7B))
+
 
 class RECT(ctypes.Structure):
     _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
@@ -564,6 +569,27 @@ def get_desktop_path():
         pass
     cand = os.path.join(os.path.expanduser("~"), "Desktop")
     return cand
+
+
+def get_downloads_path():
+    """当前用户下载目录（用户在「属性 → 位置」里改过也能拿到）。
+
+    优先使用 Windows 已知文件夹接口，它读取的是注册表里重定向后的真实位置；
+    失败时退回 ``%USERPROFILE%\\Downloads``。返回的目录可能不存在，调用方需自行
+    判断（下载位置被移到已拔出的 U 盘时就会这样）。
+    """
+    try:
+        path_ptr = ctypes.c_wchar_p()
+        hr = shell32.SHGetKnownFolderPath(ctypes.byref(FOLDERID_Downloads), 0,
+                                          None, ctypes.byref(path_ptr))
+        if hr == 0 and path_ptr.value:
+            p = path_ptr.value
+            ole32.CoTaskMemFree(path_ptr)
+            if p:
+                return p
+    except Exception:
+        pass
+    return os.path.join(os.path.expanduser("~"), "Downloads")
 
 
 def list_removable_drives():
