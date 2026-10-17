@@ -10,7 +10,7 @@ import os
 import tkinter as tk
 from tkinter import messagebox, simpledialog
 
-from . import config, paths, winapi
+from . import config, lesson, paths, winapi
 from .uishared import (ACCENT, ACCENT_D, BG, BORDER, CARD, DANGER, MUTED, OK,
                        SOFT, TEXT, WARN, ScrollFrame,
                        center as _center, font as _font, px, short_path)
@@ -192,6 +192,29 @@ class SettingsWindow:
             side="right", padx=px(6))
         self._refresh_dl_label()
 
+        # ---- ClassIsland 课程联动
+        c_ci = self._card(wrap, "ClassIsland 课程联动")
+        self.v_lesson = self._var("classisland_enabled")
+        self._check(c_ci, "按 ClassIsland 当前课程建议归档科目（默认关闭）",
+                    self.v_lesson)
+        self.v_lesson_auto = self._var("classisland_auto")
+        self._check(c_ci, "上课时直接归档到对应科目文件夹，不再弹气泡",
+                    self.v_lesson_auto)
+        tk.Label(c_ci,
+                 text="需要在 ClassIsland 里安装「classDesktopManager 课程联动」"
+                      "插件。插件只在本机写一个状态文件，不上传任何数据；"
+                      "关掉 ClassIsland 或超过一分钟没更新就自动忽略。",
+                 bg=CARD, fg=MUTED, font=_font(8), anchor="w", justify="left",
+                 wraplength=px(540)).pack(anchor="w", padx=px(14),
+                                           pady=(0, px(6)))
+        cirow = tk.Frame(c_ci, bg=CARD)
+        cirow.pack(fill="x", padx=px(14), pady=(0, px(12)))
+        self.lbl_ci = tk.Label(cirow, text="", bg=CARD, fg=TEXT, font=_font(9),
+                               anchor="w", justify="left")
+        self.lbl_ci.pack(side="left", fill="x", expand=True)
+        FlatButton(cirow, "刷新状态", self._refresh_ci_label).pack(side="right")
+        self._refresh_ci_label()
+
         # ---- 关注哪些文件
         c3 = self._card(wrap, "关注哪些文件")
         tk.Label(c3, text="快捷方式（.lnk / .url）和临时文件永远不会打扰您。",
@@ -311,6 +334,16 @@ class SettingsWindow:
     def _use_auto_downloads(self):
         self.cfg["downloads_path"] = ""
         self._refresh_dl_label()
+
+    # ------------------------------------------------- ClassIsland 联动
+    def _refresh_ci_label(self):
+        try:
+            text = lesson.describe()
+        except Exception:
+            text = "无法读取 ClassIsland 状态"
+        if not self.v_lesson.get():
+            text = "已关闭（开启后才会读取课程）"
+        self.lbl_ci.configure(text=text)
 
     def _load_char_thumbs(self):
         out = {}
@@ -462,6 +495,9 @@ class SettingsWindow:
         self.v_ask.set(True)
         self.v_downloads.set(False)
         self.cfg["downloads_path"] = ""
+        self.v_lesson.set(False)
+        self.v_lesson_auto.set(False)
+        self._refresh_ci_label()
         self._refresh_dl_label()
         for k, _l in config.AUTO_KIND_CHOICES:
             self.v_kinds[k].set(k in config.DEFAULTS["auto_kinds"])
@@ -486,6 +522,8 @@ class SettingsWindow:
         cfg["auto_kinds"] = kinds
         cfg["watch_downloads"] = bool(self.v_downloads.get())
         cfg["downloads_path"] = str(self.cfg.get("downloads_path") or "").strip()
+        cfg["classisland_enabled"] = bool(self.v_lesson.get())
+        cfg["classisland_auto"] = bool(self.v_lesson_auto.get())
         cfg["subjects"] = self.cfg.get("subjects", [])
         cfg["first_run"] = False
         ok, err = config.save(cfg)

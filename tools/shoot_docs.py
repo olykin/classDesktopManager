@@ -193,6 +193,18 @@ def build_env():
               "w", encoding="utf-8") as f:
         json.dump([{"name": n, "subject": s} for n, s in hist],
                   f, ensure_ascii=False, indent=1)
+
+    # 预置 ClassIsland 课程快照，设置页「课程联动」卡片可展示当前课程
+    snap = {
+        "schema": 1, "source": "ClassIsland", "trigger": "heartbeat",
+        "updated": int(time.time() * 1000), "state": "OnClass",
+        "onClass": True, "subject": "数学", "nextSubject": "英语",
+        "lessonConfirmed": True, "classPlanEnabled": True,
+        "classPlanLoaded": True,
+    }
+    with open(os.path.join(APP_TMP, "classDesktopManager", "classisland.json"),
+              "w", encoding="utf-8") as f:
+        json.dump(snap, f, ensure_ascii=False, indent=1)
     return cfg
 
 
@@ -224,39 +236,49 @@ def run():
     at(1900, lambda: grab_window(app.main_window.win, "01-main"))
     at(2900, lambda: app.main_window.hide())
 
-    # 2) 设置界面（两屏：常规 + 提示人物）-------------------------------
+    # 2) 设置界面（三屏：常规 + 课程联动 + 提示人物）---------------------
     def open_settings():
+        app.cfg["classisland_enabled"] = True
         app.open_settings()
         app.settings_window.win.geometry("620x720+120+30")
 
     at(3300, open_settings)
 
-    def scroll_char():
-        # 把「关注哪些文件」卡片滚到顶部：整卡 + 下方「提示人物」都能入镜
-        try:
-            sf = app.settings_window.scroll
-            body = sf.body
-            body.update_idletasks()
-            cards = [w for w in body.winfo_children() if w.winfo_height() > 80]
-            target = cards[3]
-            total = sf.canvas.bbox("all")[3] or 1
-            sf.canvas.yview_moveto(max(0.0, target.winfo_y() / float(total)))
-        except Exception as e:  # noqa: BLE001
-            print("scroll failed: %r" % (e,))
+    def scroll_to(index):
+        # 把指定卡片滚到顶部
+        def do():
+            try:
+                sf = app.settings_window.scroll
+                body = sf.body
+                body.update_idletasks()
+                cards = [w for w in body.winfo_children()
+                         if w.winfo_height() > 80]
+                target = cards[index]
+                total = sf.canvas.bbox("all")[3] or 1
+                sf.canvas.yview_moveto(
+                    max(0.0, target.winfo_y() / float(total)))
+            except Exception as e:  # noqa: BLE001
+                print("scroll failed: %r" % (e,))
+        return do
 
     at(4400, lambda: grab_window(app.settings_window.win, "05-settings"))
-    at(5500, scroll_char)
-    at(6500, lambda: grab_window(app.settings_window.win, "06-settings-character"))
-    at(7500, lambda: app.settings_window.hide())
+    at(5300, scroll_to(3))
+    at(6300, lambda: grab_window(app.settings_window.win,
+                                 "08-settings-classisland"))
+    at(7200, scroll_to(4))
+    at(8300, lambda: grab_window(app.settings_window.win,
+                                 "06-settings-character"))
+    at(9300, lambda: app.settings_window.hide())
 
     # 3) 认得出的文件 -> 建议归档气泡 ------------------------------------
     def make_docx():
+        app.cfg["classisland_enabled"] = False
         p = os.path.join(FAKE, "第三单元数学测试卷.docx")
         with open(p, "wb") as f:
             f.write(b"x" * 184320)
 
-    at(7700, make_docx)
-    at(10000, lambda: grab_bubble("02-bubble"))
+    at(9600, make_docx)
+    at(12000, lambda: grab_bubble("02-bubble"))
 
     # 4) 一键归档成功气泡 ------------------------------------------------
     def click_move():
@@ -266,8 +288,8 @@ def run():
         if wins:
             wins[-1].fire("move")
 
-    at(10800, click_move)
-    at(12800, lambda: grab_bubble("03-done"))
+    at(12800, click_move)
+    at(14800, lambda: grab_bubble("03-done"))
 
     # 5) 认不出科目 -> 询问气泡 ------------------------------------------
     def make_unknown():
@@ -276,8 +298,8 @@ def run():
         with open(p, "wb") as f:
             f.write(b"x" * 40960)
 
-    at(13600, make_unknown)
-    at(16500, lambda: grab_bubble("04-bubble-ask"))
+    at(15600, make_unknown)
+    at(18500, lambda: grab_bubble("04-bubble-ask"))
 
     # 6) 「选择归档文件夹」窗口 ------------------------------------------
     def open_pick():
@@ -287,8 +309,8 @@ def run():
         app.open_picker(p, os.path.getsize(p), "桌面", "image")
         app.picker_window.win.geometry("580x620+220+70")
 
-    at(17300, open_pick)
-    at(19300, lambda: grab_window(app.picker_window.win, "07-picker"))
+    at(20100, open_pick)
+    at(22100, lambda: grab_window(app.picker_window.win, "07-picker"))
 
     def finish():
         if CTX["done"]:
@@ -297,7 +319,7 @@ def run():
         print("done: %s" % ", ".join(sorted(CTX["grabbed"])), flush=True)
         app.shutdown()
 
-    at(21000, finish)
+    at(24000, finish)
     try:
         root.mainloop()
     except KeyboardInterrupt:

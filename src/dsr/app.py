@@ -20,7 +20,7 @@ import threading
 import time
 import traceback
 
-from . import config, paths, usbscan, winapi
+from . import config, lesson, paths, usbscan, winapi
 from .bubble import BubbleManager
 from .desktopwatch import DesktopWatcher
 from .tray import TrayIcon
@@ -379,6 +379,15 @@ class App:
         subject, reason = config.suggest_subject(name, self.cfg)
         kw_subject, kw_score = config.keyword_hit(name, self.cfg)
 
+        # ClassIsland 联动：正在上的课优先于文件名推断
+        lesson_subject = None
+        if self.cfg.get("classisland_enabled"):
+            info = lesson.current()
+            if info:
+                lesson_subject = info["subject"]
+                subject = lesson_subject
+                reason = "来自 ClassIsland 当前课程"
+
         # 认不出科目时，是否值得开口问老师
         ask = (not subject) and scoped and bool(self.cfg.get("ask_unknown", True))
 
@@ -395,6 +404,12 @@ class App:
             return
 
         origin = ("U 盘 %s" % src_drive.rstrip("\\")) if from_usb else source
+        if (lesson_subject and scoped
+                and self.cfg.get("classisland_auto")):
+            _log("自动归档：%s（来源 %s）→ %s（ClassIsland 当前课程）"
+                 % (name, origin, subject))
+            self._spawn(self._move_file, path, subject, origin)
+            return
         if subject:
             _log("提醒：%s（来源 %s，建议 %s）" % (name, origin, subject))
             self._show_file_bubble(path, size, subject, reason, origin, kind)

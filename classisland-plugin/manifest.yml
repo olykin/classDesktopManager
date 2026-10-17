@@ -1,0 +1,21 @@
+# nonk8s
+# 插件清单文件使用 YAML 格式存储。
+# YAML 教程：https://www.runoob.com/w3cnote/yaml-intro.html
+# 插件清单格式：https://docs.classisland.tech/zh-cn/latest/dev/plugins/create-project/#%E6%8F%92%E4%BB%B6%E6%B8%85%E5%8D%95%E6%96%87%E4%BB%B6
+
+id: olykin.classdesktopmanager
+name: classDesktopManager 课程联动
+description: 把 ClassIsland 的当前课程写入本地状态文件，供 classDesktopManager 按课程把桌面/下载文件归档到对应科目文件夹。
+entranceAssembly: "ClassDesktopManagerBridge.dll"
+url: https://github.com/olykin/classDesktopManager
+version: 1.0.0.0
+apiVersion: 2.0.0.0
+author: olykin
+supportedOSPlatforms:
+- Windows
+readme: README.md
+icon: icon.png
+repoOwner: olykin
+repoName: classDesktopManager
+assetsRoot: main
+artifactName: ClassDesktopManagerBridge.cipx
