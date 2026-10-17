@@ -132,7 +132,8 @@ Windows 10 / 11 x64 · 免安装 · 常驻托盘 · 开机自启
 
 ## 快速开始
 
-1. 下载 `dist\classDesktopManager.exe`；
+1. 打开 [Releases](https://github.com/olykin/classDesktopManager/releases) 页面，
+   下载最新版本里的 `classDesktopManager.exe`；
 2. 双击运行，**免安装**，也不需要装 Python；
 3. 首次运行会自动常驻托盘，并弹出一个气泡做自我介绍；
 4. 把文件复制到桌面，看气泡提示操作即可。
