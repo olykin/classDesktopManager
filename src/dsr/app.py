@@ -469,6 +469,29 @@ class App:
             _log("气泡未显示：UI 线程未就绪（ready=%s）"
                  % (self.ui_thread.ready.is_set() if self.ui_thread else None))
 
+    # ---------------------------------------------------- 强制归档
+    def force_archive(self):
+        return bool(self.cfg.get("force_archive"))
+
+    def _archive_spec(self, spec):
+        """强制归档模式：去掉「稍后处理」，并隐藏右上角关闭键。"""
+        if not self.force_archive():
+            return spec
+        spec = dict(spec)
+        buttons = [b for b in (spec.get("buttons") or [])
+                   if b.get("id") != "dismiss"]
+        if not buttons:
+            # 设置里把两枚按钮都关掉时，至少留一个出口，避免气泡锁死
+            buttons = [{"id": "other", "text": "放置在其他文件夹",
+                        "kind": "primary"}]
+        spec["buttons"] = buttons
+        spec["closable"] = False
+        return spec
+
+    def _archive_duration(self, duration=None):
+        """强制归档时气泡不自动消失，必须由老师处理。"""
+        return 0 if self.force_archive() else duration
+
     def _show_file_bubble(self, path, size, subject, reason, origin, kind=""):
         name = os.path.basename(path)
         body = ["《%s》" % config.short_name(name, 34),
@@ -507,7 +530,8 @@ class App:
                 win.begin_close()
                 self._ui(lambda: self.open_picker(path, size, origin, kind))
 
-        self._show(spec, on_action=action)
+        self._show(self._archive_spec(spec),
+                   duration=self._archive_duration(), on_action=action)
 
     # ---------------------------------------------------- 认不出科目时询问
     def _show_ask_bubble(self, path, size, origin, kind):
@@ -536,7 +560,8 @@ class App:
                 win.begin_close()
                 self.open_desktop()
 
-        self._show(spec, on_action=action)
+        self._show(self._archive_spec(spec),
+                   duration=self._archive_duration(), on_action=action)
 
     def open_picker(self, path, size=0, origin="", kind="", on_done=None):
         """打开「选择归档文件夹」窗口（必须在 tkinter 主线程调用）。"""
@@ -729,7 +754,8 @@ class App:
 
                 self._ui(step)
 
-        self._show(spec, duration=20, on_action=action)
+        self._show(self._archive_spec(spec),
+                   duration=self._archive_duration(20), on_action=action)
 
     def _archive_all(self, items):
         done = 0

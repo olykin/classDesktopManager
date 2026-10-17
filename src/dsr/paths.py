@@ -10,7 +10,7 @@ import sys
 
 APP_ID = "classDesktopManager"
 APP_NAME = "classDesktopManager"
-APP_VERSION = "1.7.0"
+APP_VERSION = "1.8.0"
 APP_DIR_NAME = "classDesktopManager"   # %APPDATA% 下的目录名（ASCII 更安全）
 
 

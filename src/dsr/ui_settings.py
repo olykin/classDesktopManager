@@ -114,6 +114,7 @@ class SettingsWindow:
         self.v_mode = tk.StringVar(value=self.cfg.get("detect_mode", "smart"))
         self.v_duration = tk.IntVar(value=int(self.cfg.get("duration") or 14))
         self.v_ask = self._var("ask_unknown")
+        self.v_force = self._var("force_archive")
         self.v_kinds = {}
         _cur_kinds = config.auto_kinds(self.cfg)
         for _k, _label in config.AUTO_KIND_CHOICES:
@@ -126,6 +127,14 @@ class SettingsWindow:
         self._check(c1, "关闭主窗口时最小化到托盘（不退出）", self.v_close_tray)
         self._check(c1, "弹出提醒时播放提示音", self.v_sound)
         self._check(c1, "暂停所有提醒", self.v_paused)
+        self._check(c1, "强制要求归档（去掉「稍后处理」与气泡右上角关闭键）",
+                    self.v_force)
+        tk.Label(c1,
+                 text="开启后归档提醒不会自动消失，必须选一个科目文件夹；"
+                      "关闭后恢复「稍后处理」与关闭键。",
+                 bg=CARD, fg=MUTED, font=_font(8), anchor="w", justify="left",
+                 wraplength=px(540)).pack(anchor="w", padx=px(14),
+                                           pady=(0, px(6)))
 
         c2 = self._card(wrap, "提醒方式")
         row = tk.Frame(c2, bg=CARD)
@@ -493,6 +502,7 @@ class SettingsWindow:
         self.v_duration.set(14)
         self.v_paused.set(False)
         self.v_ask.set(True)
+        self.v_force.set(False)
         self.v_downloads.set(False)
         self.cfg["downloads_path"] = ""
         self.v_lesson.set(False)
@@ -517,6 +527,7 @@ class SettingsWindow:
         cfg["duration"] = int(self.v_duration.get())
         cfg["paused"] = bool(self.v_paused.get())
         cfg["ask_unknown"] = bool(self.v_ask.get())
+        cfg["force_archive"] = bool(self.v_force.get())
         kinds = [k for k, _l in config.AUTO_KIND_CHOICES
                  if self.v_kinds[k].get()]
         cfg["auto_kinds"] = kinds

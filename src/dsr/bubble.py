@@ -336,7 +336,8 @@ class BubbleWindow:
             self._on_lbutton_up(lparam)
             return 0
         if msg == winapi.WM_RBUTTONUP:
-            self.begin_close()
+            if self.layout.closable:
+                self.begin_close()
             return 0
         if msg == winapi.WM_CAPTURECHANGED:
             self._dragging = False
@@ -401,7 +402,12 @@ class BubbleWindow:
         return None
 
     def _close_hit(self):
-        """关闭按钮的命中矩形，触摸时至少 44 逻辑像素见方。"""
+        """关闭按钮的命中矩形，触摸时至少 44 逻辑像素见方。
+
+        强制归档（closable=False）时没有关闭键，返回 None。
+        """
+        if not self.layout.closable:
+            return None
         x0, y0, x1, y1 = self.layout.close_rect
         need = int(MIN_TOUCH * self.scale)
         cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
@@ -410,7 +416,8 @@ class BubbleWindow:
         return (cx - hw, cy - hh, cx + hw, cy + hh)
 
     def _close_at(self, cx, cy):
-        return _in_rect(self._close_hit(), cx, cy)
+        rect = self._close_hit()
+        return bool(rect) and _in_rect(rect, cx, cy)
 
     def _on_mouse_move(self, lparam):
         cx, cy = self._client_pt(lparam)

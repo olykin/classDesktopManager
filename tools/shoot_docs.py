@@ -88,6 +88,12 @@ def grab_window(win, name):
         win.focus_force()
     except Exception:
         pass
+    # 防止别的置顶窗口盖住截图：临时把自己设为置顶
+    was_topmost = bool(win.attributes("-topmost"))
+    try:
+        win.attributes("-topmost", True)
+    except Exception:
+        pass
     wait_ui(CTX["root"], 450)
     frame = int(win.wm_frame(), 16)
     rc = winapi.RECT()
@@ -102,6 +108,10 @@ def grab_window(win, name):
     winapi.user32.ClientToScreen(frame, ctypes.byref(pt))
     bbox = (pt.x, rc.top, pt.x + cr.right, pt.y + cr.bottom)
     img = ImageGrab.grab(bbox=bbox, all_screens=True).convert("RGB")
+    try:
+        win.attributes("-topmost", was_topmost)
+    except Exception:
+        pass
     # 上/右边缘有 1-2px 的 DWM 阴影缝，会漏出后面的桌面，先裁掉
     img = img.crop((2, 2, img.width - 2, img.height - 2))
     img = decorate(img)

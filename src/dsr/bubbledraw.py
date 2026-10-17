@@ -172,6 +172,7 @@ class Layout:
         self.flip = False              # True = 人物在右、气泡在左
         self.buttons = []              # [(x0,y0,x1,y1,id,kind)]
         self.close_rect = (0, 0, 0, 0)
+        self.closable = True           # False = 强制归档，不画右上角关闭键
         self.title = ""
         self.accent = (0, 0, 0, 255)
         self.char_image = None
@@ -281,6 +282,7 @@ def build_layout(spec, scale=1.0):
     lay.title = title
     lay.char_image = char_img
     lay.flip = flip
+    lay.closable = bool(spec.get("closable", True))
 
     char_y = int(PAD * s)
     if flip:
@@ -424,24 +426,28 @@ def render(lay, hover_id=None, pressed_id=None):
                    fill=fill, outline=border, width=max(1, int(1.2 * s * k)))
 
     # ---- 关闭按钮（视觉 26 逻辑像素；命中区由 bubble.py 放大到 44）
-    cs = int(26 * s)
-    close_rect = (bx1 - int(BUBBLE_PAD_X * s * 0.6) - cs,
-                  by0 + int(10 * s),
-                  bx1 - int(BUBBLE_PAD_X * s * 0.6),
-                  by0 + int(10 * s) + cs)
-    lay.close_rect = close_rect
-    if hover_id == "__close" or pressed_id == "__close":
-        d.ellipse([close_rect[0] * k, close_rect[1] * k,
-                   close_rect[2] * k, close_rect[3] * k],
-                  fill=(241, 245, 249, 255))
-    cx = (close_rect[0] + close_rect[2]) / 2.0
-    cy = (close_rect[1] + close_rect[3]) / 2.0
-    rr = int(5 * s)
-    wdt = max(1, int(1.6 * s * k))
-    d.line([(cx - rr) * k, (cy - rr) * k, (cx + rr) * k, (cy + rr) * k],
-           fill=(148, 163, 184, 255), width=wdt)
-    d.line([(cx - rr) * k, (cy + rr) * k, (cx + rr) * k, (cy - rr) * k],
-           fill=(148, 163, 184, 255), width=wdt)
+    #      强制归档模式（closable=False）时整颗隐藏，连命中区也不留
+    if lay.closable:
+        cs = int(26 * s)
+        close_rect = (bx1 - int(BUBBLE_PAD_X * s * 0.6) - cs,
+                      by0 + int(10 * s),
+                      bx1 - int(BUBBLE_PAD_X * s * 0.6),
+                      by0 + int(10 * s) + cs)
+        lay.close_rect = close_rect
+        if hover_id == "__close" or pressed_id == "__close":
+            d.ellipse([close_rect[0] * k, close_rect[1] * k,
+                       close_rect[2] * k, close_rect[3] * k],
+                      fill=(241, 245, 249, 255))
+        cx = (close_rect[0] + close_rect[2]) / 2.0
+        cy = (close_rect[1] + close_rect[3]) / 2.0
+        rr = int(5 * s)
+        wdt = max(1, int(1.6 * s * k))
+        d.line([(cx - rr) * k, (cy - rr) * k, (cx + rr) * k, (cy + rr) * k],
+               fill=(148, 163, 184, 255), width=wdt)
+        d.line([(cx - rr) * k, (cy + rr) * k, (cx + rr) * k, (cy - rr) * k],
+               fill=(148, 163, 184, 255), width=wdt)
+    else:
+        lay.close_rect = (0, 0, 0, 0)
 
     # ---- 缩回 1 倍，贴人物
     img = img.resize((W, H), Image.LANCZOS)
@@ -452,7 +458,7 @@ def render(lay, hover_id=None, pressed_id=None):
 
     # ---- 文字（1 倍尺寸绘制，保证清晰）
     tx = area_x0
-    tx1 = area_x1 - int(26 * s)
+    tx1 = area_x1 - (int(26 * s) if lay.closable else 0)
     cy_cursor = by0 + int(BUBBLE_PAD_Y * s) + int(4 * s)
     lh_title = int(TITLE_SIZE * s * 1.42)
     lh_body = int(BODY_SIZE * s * 1.62)

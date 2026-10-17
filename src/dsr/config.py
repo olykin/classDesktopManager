@@ -132,6 +132,7 @@ DEFAULTS = {
     "downloads_path": "",        # 留空表示自动检测（含用户改过下载位置的情况）
     "classisland_enabled": False,   # 是否按 ClassIsland 当前课程辅助分类
     "classisland_auto": False,      # 上课时是否直接归档（不弹提醒）
+    "force_archive": False,         # 强制归档：去掉「稍后处理」和关闭键
 }
 
 _CJK = re.compile(r"[\u3000-\u9fff\uf900-\ufaff]")
