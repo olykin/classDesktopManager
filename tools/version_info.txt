@@ -16,12 +16,12 @@ VSVersionInfo(
         '080404B0',
         [StringStruct('CompanyName', ''),
          StringStruct('FileDescription', 'classDesktopManager'),
-         StringStruct('FileVersion', u'1.8.0.0'),
+         StringStruct('FileVersion', u'1.8.1.0'),
          StringStruct('InternalName', 'classDesktopManager'),
          StringStruct('LegalCopyright', ''),
          StringStruct('OriginalFilename', 'classDesktopManager.exe'),
          StringStruct('ProductName', 'classDesktopManager'),
-         StringStruct('ProductVersion', u'1.8.0.0')])
+         StringStruct('ProductVersion', u'1.8.1.0')])
     ]),
     VarFileInfo([VarStruct('Translation', [2052, 1200])])
   ]

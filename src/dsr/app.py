@@ -725,39 +725,47 @@ class App:
             "accent": "#B7791F",
         }
 
+        def pick_unknown(queue, on_done=None):
+            queue = list(queue)
+            state = {"first": True}
+
+            def step(subject=None):
+                if not state["first"] and not subject:
+                    if on_done:
+                        on_done()
+                    return          # 老师按了取消，不再追问下一个
+                state["first"] = False
+                while queue:
+                    nxt, src_origin = queue.pop(0)
+                    if not os.path.exists(nxt):
+                        continue
+                    try:
+                        size = os.path.getsize(nxt)
+                    except OSError:
+                        size = 0
+                    self.open_picker(
+                        nxt, size, src_origin,
+                        config.file_kind(os.path.basename(nxt)),
+                        on_done=step)
+                    return
+                if on_done:
+                    on_done()
+
+            step()
+
         def action(aid, win):
             if aid == "archive":
                 win.begin_close()
-                self._spawn(self._archive_all, items)
+                # 认得出的先批量归档，认不出的接着逐个问
+                self._spawn(self._archive_all, items, unknown, pick_unknown)
             elif aid == "pick":
                 win.begin_close()
-                queue = list(unknown)
-                state = {"first": True}
-
-                def step(subject=None):
-                    if not state["first"] and not subject:
-                        return          # 老师按了取消，不再追问下一个
-                    state["first"] = False
-                    while queue:
-                        nxt, src_origin = queue.pop(0)
-                        if not os.path.exists(nxt):
-                            continue
-                        try:
-                            size = os.path.getsize(nxt)
-                        except OSError:
-                            size = 0
-                        self.open_picker(
-                            nxt, size, src_origin,
-                            config.file_kind(os.path.basename(nxt)),
-                            on_done=step)
-                        return
-
-                self._ui(step)
+                self._ui(lambda: pick_unknown(unknown))
 
         self._show(self._archive_spec(spec),
                    duration=self._archive_duration(20), on_action=action)
 
-    def _archive_all(self, items):
+    def _archive_all(self, items, unknown=None, then_pick=None):
         done = 0
         fail = 0
         for full, name, subject, _origin in items:
@@ -775,6 +783,15 @@ class App:
             self.watcher.rescan()
         if self.dl_watcher:
             self.dl_watcher.rescan()
+        if unknown and then_pick:
+            # 还有认不出的文件：交给「选择文件夹」流程继续收尾
+            self._ui(lambda: then_pick(
+                unknown,
+                on_done=lambda: self._archive_summary(done, fail)))
+            return
+        self._archive_summary(done, fail)
+
+    def _archive_summary(self, done, fail):
         body = ["成功归档 %d 个文件" % done]
         if fail:
             body.append("有 %d 个没能移动" % fail)
